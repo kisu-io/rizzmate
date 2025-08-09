@@ -78,27 +78,65 @@ async function requestWithRetry(body: any, cacheKey: string) {
 
 export type Tone = 'Flirty'|'Polite'|'Funny'|'Direct'|'Witty';
 
-const SYSTEM = `You write short, natural dating messages. Keep it concise, respectful, and in the requested tone. Avoid pickup lines that are crude or offensive.`;
+const SYSTEM = `You write short, natural dating replies in a Gen-Z voice. Keep replies light, confident, playful. Slightly naughty (PG-13) but never crude, explicit, mean, manipulative, or love-bomby. Max length ~120 characters, 1–2 sentences. Avoid try-hard/cringe clichés like "m'lady", "uwu", or generic pickup lines. Emojis: optional, MAX 1, no emoji salad. Use slang sparingly: chill, low-key, vibe, bold, etc. Personalize if the seed mentions plans, places, days, or interests. Respect boundaries, de-escalate if sensitive or negative.`;
 
-function toneStyle(tone: Tone) {
+function toneStyle(tone: Tone): string {
   switch (tone) {
-    case 'Flirty': return 'Playful, light flirty, one sentence.';
-    case 'Polite': return 'Warm, considerate, respectful tone.';
-    case 'Funny': return 'Light humor, one-liner vibe. Keep it kind.';
-    case 'Direct': return 'Confident, straightforward, friendly.';
-    case 'Witty':  return 'Clever, smart, one-liner with subtle charm.';
+    case 'Flirty': return 'Playful tease, confident, flirt without being cheesy.';
+    case 'Polite': return 'Warm, considerate, kind; clear but not bland.';
+    case 'Funny': return 'Quick wit, light joke or wordplay; never corny or mean.';
+    case 'Direct': return 'Confident, clear ask; friendly, no pressure.';
+    case 'Witty': return 'Clever, smart one-liner; subtle flex, not pretentious.';
+  }
+}
+
+function examples(tone: Tone): string {
+  switch (tone) {
+    case 'Flirty': return 'You seem like trouble in the best way—drink this week? 😉';
+    case 'Polite': return 'Would love to grab coffee soon if you\'re free—totally your call.';
+    case 'Funny': return 'Are we flirting or just speed-running small talk? Either way, I\'m in.';
+    case 'Direct': return 'Thursday works—drink or coffee?';
+    case 'Witty': return 'Chemistry seems promising. Lab test = tacos?';
+  }
+}
+
+function buildUserPrompt(seed: string, tone: Tone, count?: number): string {
+  const trimmedSeed = seed.trim().replace(/\s+/g, ' ').slice(-600);
+  
+  if (count) {
+    return `Context: ${trimmedSeed}
+
+Task: Write ${count} DISTINCT short replies for a dating chat in the ${tone} tone.
+Style: ${toneStyle(tone)}
+Example vibe: "${examples(tone)}"
+
+Rules:
+- Each reply 1–2 short sentences max (~120 chars)
+- No numbering. Separate each reply with '---'
+- Gen-Z voice: confident, playful, slightly naughty but PG-13
+- Optional emoji (max 1), no emoji salad
+- Personalize based on context if possible`;
+  } else {
+    return `Context: ${trimmedSeed}
+
+Task: Write ONE short reply for a dating chat in the ${tone} tone.
+Style: ${toneStyle(tone)}
+Example vibe: "${examples(tone)}"
+Length: 1–2 short sentences max (~120 characters)
+Voice: Gen-Z, confident, playful, slightly naughty but PG-13`;
   }
 }
 
 export async function generateOne({ seed, tone }: { seed: string; tone: Tone }): Promise<string> {
   if (!API_KEY) throw new Error('Missing OPENAI_API_KEY');
   const cacheKey = `one:${tone}:${seed}`;
-  const userPrompt = `Context:\n${seed}\n\nTask: Write ONE short reply for a dating chat in the tone: ${tone}.
-Style: ${toneStyle(tone)}\nLength: 1–2 short sentences max.`;
+  const userPrompt = buildUserPrompt(seed, tone);
 
   const data = await requestWithRetry({
     model: 'gpt-4o-mini',
-    temperature: 0.9,
+    temperature: 1.0,
+    top_p: 0.9,
+    presence_penalty: 0.3,
     messages: [
       { role: 'system', content: SYSTEM },
       { role: 'user', content: userPrompt },
@@ -115,20 +153,13 @@ export async function generateManyForTone(
 ): Promise<string[]> {
   if (!API_KEY) throw new Error('Missing OPENAI_API_KEY');
   const cacheKey = `many:${count}:${tone}:${seed}`;
-  const userPrompt =
-`Context:
-${seed}
-
-Task: Write ${count} DISTINCT short replies for a dating chat in the tone: ${tone}.
-Style: ${toneStyle(tone)}
-Rules:
-- Each reply 1–2 short sentences max.
-- No numbering. Separate each reply with '---'.
-- Avoid crude content; keep respectful.`;
+  const userPrompt = buildUserPrompt(seed, tone, count);
 
   const data = await requestWithRetry({
     model: 'gpt-4o-mini',
-    temperature: 0.9,
+    temperature: 1.05,
+    top_p: 0.9,
+    presence_penalty: 0.35,
     messages: [
       { role: 'system', content: SYSTEM },
       { role: 'user', content: userPrompt },
