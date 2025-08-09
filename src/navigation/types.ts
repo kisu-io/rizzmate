@@ -18,6 +18,7 @@ export type RootStackParamList = {
   // stacked screens
   ReviewUpload: { imageUri: string };
   Result: { input: string; tone: Tone };
+  ManualResults: { seed: string };
 };
 
 export type TabParamList = {

@@ -12,7 +12,7 @@ import { downscale } from '../ocr/prepare';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import * as Haptics from 'expo-haptics';
-import { generateOne } from '../services/openai';
+import { generateOne, prettyOpenAIError } from '../services/openai';
 
 type UploadRoute = { key: string; name: 'Upload'; params?: { imageUri?: string } };
 
@@ -206,7 +206,7 @@ export default function UploadScreen(): React.ReactElement {
                     Toast.show({ 
                       type: 'error', 
                       text1: 'Generation failed', 
-                      text2: e?.message || 'Please try again.' 
+                      text2: prettyOpenAIError(e)
                     });
                   } finally {
                     setGenLoading(false);

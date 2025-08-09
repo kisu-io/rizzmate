@@ -10,7 +10,7 @@ import Toast from 'react-native-toast-message';
 import { addHistoryItem } from '../storage/history';
 import { bumpMetric } from '../storage/trending';
 import { lineId } from '../lib/hash';
-import { generateAllTones, generateManyForTone } from '../services/openai';
+import { generateAllTones, generateManyForTone, prettyOpenAIError } from '../services/openai';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = { key: string; name: 'ManualResults'; params: { seed: string } };
@@ -28,6 +28,8 @@ export default function ManualResultsScreen(): React.ReactElement {
   const [suggestions, setSuggestions] = useState<Record<Tone, Suggestion[]>>({
     Flirty: [], Polite: [], Funny: [], Direct: [], Witty: [],
   });
+  const [cooldown, setCooldown] = useState(0);
+  const [toneLoading, setToneLoading] = useState(false);
   const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export default function ManualResultsScreen(): React.ReactElement {
         Toast.show({ 
           type: 'error', 
           text1: 'Couldn\'t generate replies', 
-          text2: e?.message || 'Please try again.' 
+          text2: prettyOpenAIError(e)
         });
       } finally {
         setLoading(false);
@@ -64,6 +66,12 @@ export default function ManualResultsScreen(): React.ReactElement {
     };
     loadSuggestions();
   }, [seed]);
+
+  useEffect(() => {
+    if (!cooldown) return;
+    const id = setInterval(() => setCooldown(c => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
 
   const onCopy = async (text: string) => {
     await Clipboard.setStringAsync(text);
@@ -78,22 +86,29 @@ export default function ManualResultsScreen(): React.ReactElement {
     await bumpMetric(lineId(text), 'saves');
   };
 
-  const onRegenerateTone = async (tone: Tone) => {
+  const onRegenerateTone = async (t: Tone) => {
+    if (cooldown || toneLoading) return;
+    setCooldown(5);
+    setToneLoading(true);
     try {
       await Haptics.selectionAsync();
-      const texts = await generateManyForTone({ seed, tone, count: 4 });
-      const list = texts.map((text, idx) => ({
-        id: `${tone}-${Date.now()}-${idx}`,
-        text,
-        tone,
+      const replies = await generateManyForTone({ seed, tone: t, count: 4 });
+      setSuggestions(prev => ({ 
+        ...prev, 
+        [t]: replies.map((text, idx) => ({ 
+          id: `${t}-${Date.now()}-${idx}`, 
+          text, 
+          tone: t 
+        })) 
       }));
-      setSuggestions((s) => ({ ...s, [tone]: list }));
-    } catch (e: any) {
+    } catch (e) {
       Toast.show({ 
         type: 'error', 
         text1: 'Regeneration failed', 
-        text2: e?.message || 'Please try again.' 
+        text2: prettyOpenAIError(e)
       });
+    } finally {
+      setToneLoading(false);
     }
   };
 
@@ -135,8 +150,19 @@ export default function ManualResultsScreen(): React.ReactElement {
             ))}
           </List>
 
-          <Regenerate onPress={() => onRegenerateTone(activeTone)} accessibilityLabel="Regenerate this tone" activeOpacity={0.85}>
-            <RegenerateText>Regenerate {activeTone}</RegenerateText>
+          <Regenerate 
+            disabled={toneLoading || cooldown > 0}
+            onPress={() => onRegenerateTone(activeTone)} 
+            accessibilityLabel="Regenerate this tone" 
+            activeOpacity={0.85}
+          >
+            {toneLoading ? (
+              <ActivityIndicator size="small" color="#374151" />
+            ) : (
+              <RegenerateText>
+                Regenerate {activeTone}{cooldown > 0 ? ` (${cooldown}s)` : ''}
+              </RegenerateText>
+            )}
           </Regenerate>
         </AnimatedResults>
       )}
@@ -240,12 +266,13 @@ const SmallGhostText = styled.Text`
   font-size: 13px;
 `;
 
-const Regenerate = styled.TouchableOpacity`
+const Regenerate = styled.TouchableOpacity<{ disabled?: boolean }>`
   align-self: center;
   margin-top: 6px;
   padding: 8px 12px;
   border-radius: 999px;
   background-color: #F3F4F6;
+  opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
 `;
 
 const RegenerateText = styled.Text`

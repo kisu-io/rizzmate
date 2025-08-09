@@ -3,7 +3,7 @@ import styled from 'styled-components/native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, Tone } from '../navigation/types';
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, Animated } from 'react-native';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, Animated, FlatList } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import TonePicker, { TonePick, useToneList } from '../components/TonePicker';
 
