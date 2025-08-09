@@ -25,7 +25,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeout = TIMEOU
 
 async function requestWithRetry(body: any, cacheKey: string) {
   if (cache.has(cacheKey)) return cache.get(cacheKey);
-  if (inFlight[cacheKey]) return inFlight[cacheKey];
+  if (cacheKey in inFlight) return inFlight[cacheKey];
 
   const p = (async () => {
     let attempt = 0;
