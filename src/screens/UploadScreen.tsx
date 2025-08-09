@@ -6,19 +6,21 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Tone } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Animated, Image, ActivityIndicator } from 'react-native';
+import { Animated, Image, ActivityIndicator, FlatList } from 'react-native';
 import { runOCR } from '../ocr/ocr';
 import { downscale } from '../ocr/prepare';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import * as Haptics from 'expo-haptics';
 import { generateOne, prettyOpenAIError } from '../services/openai';
+import * as Clipboard from 'expo-clipboard';
 
-type UploadRoute = { key: string; name: 'Upload'; params?: { imageUri?: string } };
+// This screen is registered under 'ReviewUpload' in the navigator
+type ReviewUploadRoute = { key: string; name: 'ReviewUpload'; params?: { imageUri?: string } };
 
 export default function UploadScreen(): React.ReactElement {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute<UploadRoute>();
+  const route = useRoute<ReviewUploadRoute>();
   const [imageUri, setImageUri] = useState<string | null>(route?.params?.imageUri ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,16 @@ export default function UploadScreen(): React.ReactElement {
   const scanAnim = useRef(new Animated.Value(0)).current;
   const revealAnim = useRef(new Animated.Value(0)).current;
   const scanningRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // Derived state (relaxed rule: allow generate even if OCR text is short/empty)
+  const ocrLen = (ocrText || '').trim().length;
+  const canGenerate = !loading && !genLoading && !!tone; // allow even if ocrLen === 0
+
+  // Replies and typing animation state
+  type R = { id: string; text: string; tone: Tone; createdAt: number };
+  const [replies, setReplies] = useState<R[]>([]);
+  const [typing, setTyping] = useState('');
+  const typeIdx = useRef(0);
 
   const toneToEmoji = (t: Tone): string => {
     switch (t) {
@@ -194,14 +206,28 @@ export default function UploadScreen(): React.ReactElement {
               <RightPill
                 activeOpacity={0.85}
                 accessibilityLabel="Generate answer"
-                disabled={genLoading || !tone || !ocrText.trim()}
+                disabled={!canGenerate}
+                accessibilityState={{ disabled: !canGenerate }}
                 onPress={async () => {
-                  if (!tone || !ocrText.trim()) return;
+                  if (!tone || genLoading || loading) return;
                   setGenLoading(true);
                   try {
                     await Haptics.selectionAsync();
-                    const reply = await generateOne({ seed: ocrText.trim(), tone });
-                    navigation.navigate('Result', { input: reply, tone });
+                    const base = (ocrText || '').trim().replace(/\s+/g, ' ');
+                    const seed = base.length ? base.slice(-600) : 'No visible chat text. Craft a short opener that fits the selected tone.';
+                    const text = await generateOne({ seed, tone });
+                    const item: R = { id: `${Date.now()}`, text, tone, createdAt: Date.now() };
+                    setReplies(prev => [item, ...prev]);
+                    // Typewriter effect for newest item
+                    setTyping('');
+                    typeIdx.current = 0;
+                    const tick = () => {
+                      typeIdx.current += 2;
+                      const slice = text.slice(0, typeIdx.current);
+                      setTyping(slice);
+                      if (slice.length < text.length) requestAnimationFrame(tick);
+                    };
+                    requestAnimationFrame(tick);
                   } catch (e: any) {
                     Toast.show({ 
                       type: 'error', 
@@ -227,6 +253,33 @@ export default function UploadScreen(): React.ReactElement {
         )}
 
       </Footer>
+      {/* Primary (latest) reply with typing */}
+      {replies[0] ? (
+        <ReplyPrimary activeOpacity={0.85} onPress={async () => { await Clipboard.setStringAsync(replies[0].text); Toast.show({ type:'success', text1:'Copied' }); }}>
+          <ReplyTone>{toneToEmoji(replies[0].tone)}</ReplyTone>
+          <ReplyText>{typing || replies[0].text}</ReplyText>
+        </ReplyPrimary>
+      ) : (
+        !loading && <Hint>Pick a tone and generate your first reply.</Hint>
+      )}
+
+      {/* Previous replies */}
+      {replies.length > 1 && (
+        <FlatList
+          data={replies.slice(1)}
+          keyExtractor={(i) => i.id}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}
+          renderItem={({ item }) => (
+            <ReplyCard activeOpacity={0.85} onPress={async () => { await Clipboard.setStringAsync(item.text); Toast.show({ type:'success', text1:'Copied' }); }}>
+              <ReplyTone>{toneToEmoji(item.tone)}</ReplyTone>
+              <ReplyText>{item.text}</ReplyText>
+            </ReplyCard>
+          )}
+        />
+      )}
+      {__DEV__ && (
+        <DebugText>{`tone=${tone ?? 'none'} | ocrLen=${ocrLen} | loadingOCR=${loading} | genLoading=${genLoading}`}</DebugText>
+      )}
     </Container>
   );
 }
@@ -439,6 +492,44 @@ const ChipText = styled.Text<{ active?: boolean }>`
   font-weight: ${({ active }) => (active ? 800 : 600)};
 `;
 
+const DebugText = styled.Text`
+  text-align: center;
+  color: #9CA3AF;
+  font-size: 11px;
+  margin: 6px 0 12px;
+`;
+
+const ReplyPrimary = styled.TouchableOpacity`
+  margin: 12px 16px;
+  background: #EEF2FF;
+  border-radius: 16px;
+  padding: 14px;
+  flex-direction: row;
+  gap: 8px;
+  align-items: flex-start;
+`;
+
+const ReplyCard = styled(ReplyPrimary)`
+  background: #F3F4F6;
+`;
+
+const ReplyTone = styled.Text`
+  font-size: 18px;
+  margin-top: 2px;
+`;
+
+const ReplyText = styled.Text`
+  font-size: 16px;
+  line-height: 22px;
+  color: #111827;
+  flex-shrink: 1;
+`;
+
+const Hint = styled.Text`
+  text-align: center;
+  color: #6b7280;
+  margin: 8px 16px;
+`;
  
 
 

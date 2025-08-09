@@ -29,7 +29,10 @@
     "react-native-tesseract-ocr": "^2.0.3",
     "react-native-toast-message": "^2.3.3",
     "styled-components": "^6.1.19",
-    "expo-constants": "~17.1.7"
+    "expo-constants": "~17.1.7",
+    "react-dom": "19.0.0",
+    "react-native-web": "^0.20.0",
+    "@expo/metro-runtime": "~5.0.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

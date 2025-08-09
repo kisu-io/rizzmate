@@ -35,6 +35,8 @@ export default function ManualResultsScreen(): React.ReactElement {
   useEffect(() => {
     const loadSuggestions = async () => {
       setLoading(true);
+      // prepare fade-in regardless of success/failure
+      fade.setValue(0);
       try {
         await Haptics.selectionAsync();
         const all = await generateAllTones(seed, 4);
@@ -52,8 +54,6 @@ export default function ManualResultsScreen(): React.ReactElement {
           Witty: mapped('Witty'),
         });
         setActiveTone('Flirty');
-        fade.setValue(0);
-        Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
       } catch (e: any) {
         const msg = prettyOpenAIError(e);
         Toast.show({ 
@@ -67,6 +67,7 @@ export default function ManualResultsScreen(): React.ReactElement {
         }
       } finally {
         setLoading(false);
+        Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
       }
     };
     loadSuggestions();

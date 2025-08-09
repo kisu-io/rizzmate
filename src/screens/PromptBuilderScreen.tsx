@@ -76,7 +76,7 @@ export default function PromptBuilderScreen(): React.ReactElement {
           <BottomBar>
             <BottomLeft>{tone ? `Tone: ${tone}` : 'Pick a tone'}</BottomLeft>
             <CtaWrapper pointerEvents={canGenerate ? 'auto' : 'none'}>
-              <CtaButton disabled={!canGenerate} activeOpacity={0.9} onPress={() => navigation.navigate('Result', { input: input.trim(), tone: tone as Tone })} accessibilityRole="button" accessibilityLabel="Generate reply" accessibilityState={{ disabled: !canGenerate }}>
+              <CtaButton disabled={!canGenerate} activeOpacity={0.9} onPress={() => navigation.navigate('ManualResults', { seed: input.trim() })} accessibilityRole="button" accessibilityLabel="Generate reply" accessibilityState={{ disabled: !canGenerate }}>
                 {loading ? <ActivityIndicator color="#ffffff" /> : <CtaText>Generate Reply →</CtaText>}
               </CtaButton>
             </CtaWrapper>

@@ -1,11 +1,18 @@
 import Constants from 'expo-constants';
-import * as Updates from 'expo-updates';
 
 const extraFromConstants = (Constants as any)?.expoConfig?.extra || (Constants as any)?.manifestExtra;
-const extraFromUpdates = ((Updates as any)?.manifest as any)?.extra;
-const API_KEY = (extraFromConstants?.OPENAI_API_KEY
-  ?? extraFromUpdates?.OPENAI_API_KEY
-  ?? (process as any)?.env?.OPENAI_API_KEY) as string | undefined;
+let extraFromUpdates: any;
+try {
+  // Avoid hard dependency on expo-updates to prevent bundling errors if not installed
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Updates = require('expo-updates');
+  extraFromUpdates = (Updates as any)?.manifest?.extra;
+} catch {}
+const API_KEY = (
+  extraFromConstants?.OPENAI_API_KEY ??
+  extraFromUpdates?.OPENAI_API_KEY ??
+  (typeof process !== 'undefined' ? (process as any)?.env?.OPENAI_API_KEY : undefined)
+) as string | undefined;
 const API_URL = 'https://api.openai.com/v1/chat/completions';
 // Consider Responses API if preferred; chat is simplest for RN MVP.
 

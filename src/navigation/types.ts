@@ -9,22 +9,38 @@ export type HistoryItem = {
   createdAt: number;
 };
 
+export type CompatibilityStats = {
+  youCount: number;
+  themCount: number;
+  youInterest: number;   // 0..100
+  themInterest: number;  // 0..100
+  youWords: string[];
+  themWords: string[];
+  redFlags: string[];
+  greenFlags: string[];
+  attachmentYou: 'Secure'|'Anxious'|'Avoidant'|'Unknown';
+  attachmentThem: 'Secure'|'Anxious'|'Avoidant'|'Unknown';
+  compatibility: number; // 0..100
+};
+
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList> | undefined;
   // bottom tabs
   UploadTab: undefined;
   TextTab: undefined;
-  PickupTab: undefined;
-  // stacked screens
+  InsightsTab: undefined;
+  // flows
   ReviewUpload: { imageUri: string };
-  Result: { input: string; tone: Tone };
+  ChatAnalyzeReview: { imageUri: string };
+  ChatAnalyzeResult: { imageUri: string; stats: CompatibilityStats; summary: string };
   ManualResults: { seed: string };
+  PickupLibrary: undefined;
 };
 
 export type TabParamList = {
   UploadTab: undefined;
   TextTab: undefined;
-  PickupTab: undefined;
+  InsightsTab: undefined;
 };
 
 
