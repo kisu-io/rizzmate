@@ -5,7 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, Tone } from '../navigation/types';
 import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Share } from 'react-native';
 import { addHistoryItem } from '../storage/history';
 import { bumpMetric } from '../storage/trending';
 import { lineId } from '../lib/hash';
@@ -37,7 +37,12 @@ export default function ResultScreen(): React.ReactElement {
   const { input, tone } = route.params ?? ({} as any);
 
   const hasParams = typeof input === 'string' && typeof tone === 'string';
-  const generated = useMemo(() => (hasParams ? buildReply(input!, tone as Tone) : ''), [input, tone, hasParams]);
+  // Check if input is already AI-generated text (from OCR flow) or needs buildReply (legacy)
+  const isAIText = hasParams && !!input?.trim() && !input.includes('About your message:');
+  const generated = useMemo(() => {
+    if (isAIText) return input!.trim();
+    return hasParams ? buildReply(input!, tone as Tone) : '';
+  }, [input, tone, hasParams, isAIText]);
   const [saving, setSaving] = useState(false);
   const [savedOnce, setSavedOnce] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -129,6 +134,24 @@ export default function ResultScreen(): React.ReactElement {
               <SecondaryButtonText>{savedOnce ? 'Saved' : 'Save'}</SecondaryButtonText>
             )}
           </SecondaryButton>
+
+          <GhostButton
+            activeOpacity={0.85}
+            accessibilityLabel="Share message"
+            onPress={async () => {
+              if (!generated) {
+                Toast.show({ type: 'error', text1: 'Nothing to share', text2: 'Generate a reply first.' });
+                return;
+              }
+              try {
+                await Share.share({ message: generated });
+              } catch (e) {
+                // Silent fail - user may have cancelled
+              }
+            }}
+          >
+            <GhostButtonText>Share</GhostButtonText>
+          </GhostButton>
 
           <GhostButton
             activeOpacity={0.85}

@@ -33,7 +33,7 @@ export default function ManualInputScreen(): React.ReactElement {
     setTimeout(() => {
       setLoading(false);
       // Navigate to dedicated results screen
-      (navigation as any).navigate('ManualResults', { seed: input.trim() });
+      navigation.navigate('ManualResults', { seed: input.trim() });
     }, 800);
   };
 

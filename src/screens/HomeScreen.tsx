@@ -31,6 +31,17 @@ export default function HomeScreen(): React.ReactElement {
           <PrimaryText>📸 Upload Screenshot</PrimaryText>
         </PrimaryButton>
 
+        <SecondaryButton
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Tabs', { screen: 'TextTab' })}
+        >
+          <SecondaryText>Enter Text Manually</SecondaryText>
+        </SecondaryButton>
+
+        <GhostButton activeOpacity={0.85} onPress={() => navigation.navigate('Tabs', { screen: 'PickupTab' })}>
+          <GhostButtonText>See Pickup Lines</GhostButtonText>
+        </GhostButton>
+
       </Content>
     </Container>
   );

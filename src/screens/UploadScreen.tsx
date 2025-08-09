@@ -6,11 +6,13 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Tone } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Animated, Image } from 'react-native';
+import { Animated, Image, ActivityIndicator } from 'react-native';
 import { runOCR } from '../ocr/ocr';
 import { downscale } from '../ocr/prepare';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
+import * as Haptics from 'expo-haptics';
+import { generateOne } from '../services/openai';
 
 type UploadRoute = { key: string; name: 'Upload'; params?: { imageUri?: string } };
 
@@ -22,6 +24,7 @@ export default function UploadScreen(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [ocrText, setOcrText] = useState('');
   const [tone, setTone] = useState<Tone | null>(null);
+  const [genLoading, setGenLoading] = useState(false);
   const scanAnim = useRef(new Animated.Value(0)).current;
   const revealAnim = useRef(new Animated.Value(0)).current;
   const scanningRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -183,6 +186,7 @@ export default function UploadScreen(): React.ReactElement {
                     const i = cycle.indexOf(prev);
                     return cycle[(i + 1) % cycle.length];
                   });
+                  Haptics.selectionAsync();
                 }}
               >
                 <LeftPillEmoji>{toneToEmoji(tone ?? 'Flirty')}</LeftPillEmoji>
@@ -190,18 +194,33 @@ export default function UploadScreen(): React.ReactElement {
               <RightPill
                 activeOpacity={0.85}
                 accessibilityLabel="Generate answer"
-                disabled={false}
-                onPress={() => {
-                  const seed = (ocrText && ocrText.trim().length > 0)
-                    ? ocrText.trim()
-                    : 'Hey, help me craft a smooth reply.';
-                  (navigation as any).navigate('ManualResults', { seed });
+                disabled={genLoading || !tone || !ocrText.trim()}
+                onPress={async () => {
+                  if (!tone || !ocrText.trim()) return;
+                  setGenLoading(true);
+                  try {
+                    await Haptics.selectionAsync();
+                    const reply = await generateOne({ seed: ocrText.trim(), tone });
+                    navigation.navigate('Result', { input: reply, tone });
+                  } catch (e: any) {
+                    Toast.show({ 
+                      type: 'error', 
+                      text1: 'Generation failed', 
+                      text2: e?.message || 'Please try again.' 
+                    });
+                  } finally {
+                    setGenLoading(false);
+                  }
                 }}
               >
-                <RightPillContent>
-                  <RightPillIcon>⚡</RightPillIcon>
-                  <RightPillText>Generate answer</RightPillText>
-                </RightPillContent>
+{genLoading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <RightPillContent>
+                    <RightPillIcon>⚡</RightPillIcon>
+                    <RightPillText>Generate answer</RightPillText>
+                  </RightPillContent>
+                )}
               </RightPill>
             </BottomBar>
           </Animated.View>

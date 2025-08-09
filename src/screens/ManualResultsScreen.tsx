@@ -10,12 +10,14 @@ import Toast from 'react-native-toast-message';
 import { addHistoryItem } from '../storage/history';
 import { bumpMetric } from '../storage/trending';
 import { lineId } from '../lib/hash';
-import { generateAllSuggestions, generateToneSuggestions, Suggestion } from '../lib/suggestions';
+import { generateAllTones, generateManyForTone } from '../services/openai';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = { key: string; name: 'ManualResults'; params: { seed: string } };
 
 const TONES: Tone[] = ['Flirty', 'Polite', 'Funny', 'Direct', 'Witty'];
+
+type Suggestion = { id: string; text: string; tone: Tone };
 
 export default function ManualResultsScreen(): React.ReactElement {
   const navigation = useNavigation<Nav>();
@@ -29,14 +31,38 @@ export default function ManualResultsScreen(): React.ReactElement {
   const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => {
-      const all = generateAllSuggestions(seed);
-      setSuggestions(all);
-      setLoading(false);
-      fade.setValue(0);
-      Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-    }, 800);
+    const loadSuggestions = async () => {
+      setLoading(true);
+      try {
+        await Haptics.selectionAsync();
+        const all = await generateAllTones(seed, 4);
+        // Transform into Suggestion structure
+        const mapped = (t: Tone) => (all[t] || []).map((text, idx) => ({
+          id: `${t}-${Date.now()}-${idx}`,
+          text,
+          tone: t,
+        }));
+        setSuggestions({
+          Flirty: mapped('Flirty'),
+          Polite: mapped('Polite'),
+          Funny: mapped('Funny'),
+          Direct: mapped('Direct'),
+          Witty: mapped('Witty'),
+        });
+        setActiveTone('Flirty');
+        fade.setValue(0);
+        Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+      } catch (e: any) {
+        Toast.show({ 
+          type: 'error', 
+          text1: 'Couldn\'t generate replies', 
+          text2: e?.message || 'Please try again.' 
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSuggestions();
   }, [seed]);
 
   const onCopy = async (text: string) => {
@@ -52,10 +78,23 @@ export default function ManualResultsScreen(): React.ReactElement {
     await bumpMetric(lineId(text), 'saves');
   };
 
-  const onRegenerateTone = (tone: Tone) => {
-    Haptics.selectionAsync();
-    const list = generateToneSuggestions(tone, seed, 4);
-    setSuggestions((s) => ({ ...s, [tone]: list }));
+  const onRegenerateTone = async (tone: Tone) => {
+    try {
+      await Haptics.selectionAsync();
+      const texts = await generateManyForTone({ seed, tone, count: 4 });
+      const list = texts.map((text, idx) => ({
+        id: `${tone}-${Date.now()}-${idx}`,
+        text,
+        tone,
+      }));
+      setSuggestions((s) => ({ ...s, [tone]: list }));
+    } catch (e: any) {
+      Toast.show({ 
+        type: 'error', 
+        text1: 'Regeneration failed', 
+        text2: e?.message || 'Please try again.' 
+      });
+    }
   };
 
   return (
