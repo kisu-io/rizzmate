@@ -55,11 +55,16 @@ export default function ManualResultsScreen(): React.ReactElement {
         fade.setValue(0);
         Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
       } catch (e: any) {
+        const msg = prettyOpenAIError(e);
         Toast.show({ 
           type: 'error', 
           text1: 'Couldn\'t generate replies', 
-          text2: prettyOpenAIError(e)
+          text2: msg
         });
+        // If the result was completely empty (e.g., API key missing), show a gentle hint
+        if (String(e?.message || '').includes('empty_result')) {
+          Toast.show({ type: 'info', text1: 'No suggestions yet', text2: 'Check your API key or try again in a moment.' });
+        }
       } finally {
         setLoading(false);
       }

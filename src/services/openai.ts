@@ -1,6 +1,11 @@
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 
-const API_KEY = Constants?.expoConfig?.extra?.OPENAI_API_KEY;
+const extraFromConstants = (Constants as any)?.expoConfig?.extra || (Constants as any)?.manifestExtra;
+const extraFromUpdates = ((Updates as any)?.manifest as any)?.extra;
+const API_KEY = (extraFromConstants?.OPENAI_API_KEY
+  ?? extraFromUpdates?.OPENAI_API_KEY
+  ?? (process as any)?.env?.OPENAI_API_KEY) as string | undefined;
 const API_URL = 'https://api.openai.com/v1/chat/completions';
 // Consider Responses API if preferred; chat is simplest for RN MVP.
 
@@ -123,7 +128,7 @@ Task: Write ONE short reply for a dating chat in the ${tone} tone.
 Style: ${toneStyle(tone)}
 Example vibe: "${examples(tone)}"
 Length: 1–2 short sentences max (~120 characters)
-Voice: Gen-Z, confident, playful, slightly naughty but PG-13`;
+Voice: Gen-Z, confident, playful, slightly naughty but PG-18`;
   }
 }
 
@@ -180,11 +185,18 @@ export async function generateAllTones(seed: string, count = 4): Promise<Record<
     try { results[t] = await generateManyForTone({ seed, tone: t, count }); }
     catch { results[t] = []; }
   }
+  // If everything came back empty, surface an error so callers can show feedback
+  const hasAny = tones.some((t) => (results[t]?.length ?? 0) > 0);
+  if (!hasAny) {
+    throw new Error('empty_result');
+  }
   return results;
 }
 
 export function prettyOpenAIError(e: any) {
   const m = String(e?.message || '');
+  if (m.includes('Missing OPENAI_API_KEY')) return 'Missing API key. Add it to .env and restart the app.';
+  if (m.toLowerCase().includes('network request failed')) return 'Network error. Check your connection and try again.';
   if (m.includes('rate_limited') || m.includes('429')) return 'Too many requests. Try again in a few seconds.';
   if (m.includes('timeout')) return 'Model timed out. Please try again.';
   if (m.startsWith('http_')) return 'Service error. Please try again.';
